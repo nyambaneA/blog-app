@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api'; // Changed from axios to api service
 import { format } from 'date-fns';
 
 const BlogList = () => {
@@ -17,9 +17,12 @@ const BlogList = () => {
   const fetchBlogs = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_URL}/blogs?page=${page}&limit=6`
-      );
+      setError('');
+      
+      // Using the api service instead of direct axios
+      const response = await api.get('/blogs', {
+        params: { page: page, limit: 6 }
+      });
       
       if (response.data.success) {
         setBlogs(response.data.blogs);
@@ -27,18 +30,41 @@ const BlogList = () => {
       }
     } catch (error) {
       console.error('Fetch blogs error:', error);
-      setError('Failed to load blogs');
+      
+      // Better error handling with specific messages
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        setError('Cannot connect to server. Please check your internet connection.');
+      } else if (error.response?.status === 404) {
+        setError('Blogs endpoint not found. Please check the API configuration.');
+      } else {
+        setError(error.response?.data?.message || 'Failed to load blogs');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   if (loading && blogs.length === 0) {
-    return <div className="loading">Loading blogs...</div>;
+    return (
+      <div className="loading" style={styles.loading}>
+        <div style={styles.spinner}></div>
+        <p>Loading blogs...</p>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="error" style={{ textAlign: 'center', padding: '40px' }}>{error}</div>;
+    return (
+      <div style={styles.errorContainer}>
+        <div className="error" style={styles.error}>{error}</div>
+        <button 
+          onClick={fetchBlogs}
+          style={styles.retryButton}
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -48,6 +74,7 @@ const BlogList = () => {
       {blogs.length === 0 ? (
         <div style={styles.noBlogs}>
           <p>No blogs published yet.</p>
+          <p style={styles.hint}>Create your first blog in the admin dashboard.</p>
         </div>
       ) : (
         <>
@@ -59,14 +86,25 @@ const BlogList = () => {
                     {blog.title}
                   </Link>
                 </h2>
-                <p style={styles.introduction}>{blog.introduction}</p>
+                <p style={styles.introduction}>
+                  {blog.introduction.length > 150 
+                    ? blog.introduction.substring(0, 150) + '...' 
+                    : blog.introduction}
+                </p>
                 <div style={styles.footer}>
                   <span style={styles.date}>
                     {format(new Date(blog.publishedAt || blog.createdAt), 'MMM dd, yyyy')}
                   </span>
-                  <Link to={`/blogs/${blog._id}`} style={styles.readMore}>
-                    Read More →
-                  </Link>
+                  <div style={styles.actions}>
+                    {blog.isPublished ? (
+                      <span style={styles.publishedBadge}>Published</span>
+                    ) : (
+                      <span style={styles.draftBadge}>Draft</span>
+                    )}
+                    <Link to={`/blogs/${blog._id}`} style={styles.readMore}>
+                      Read More →
+                    </Link>
+                  </div>
                 </div>
               </div>
             ))}
@@ -77,7 +115,10 @@ const BlogList = () => {
               <button 
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                style={styles.pageButton}
+                style={{
+                  ...styles.pageButton,
+                  ...(page === 1 && styles.disabledButton)
+                }}
               >
                 Previous
               </button>
@@ -87,7 +128,10 @@ const BlogList = () => {
               <button 
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                style={styles.pageButton}
+                style={{
+                  ...styles.pageButton,
+                  ...(page === totalPages && styles.disabledButton)
+                }}
               >
                 Next
               </button>
@@ -103,7 +147,9 @@ const styles = {
   title: {
     marginBottom: '40px',
     textAlign: 'center',
-    color: '#333'
+    color: '#333',
+    fontSize: '2.5rem',
+    fontWeight: '300'
   },
   grid: {
     display: 'grid',
@@ -118,64 +164,159 @@ const styles = {
     padding: '25px',
     transition: 'transform 0.3s, box-shadow 0.3s',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
   },
   cardTitle: {
     fontSize: '1.5rem',
     marginBottom: '15px',
-    color: '#333'
+    color: '#333',
+    lineHeight: '1.3'
   },
   cardLink: {
     color: '#333',
     textDecoration: 'none',
     transition: 'color 0.3s'
   },
+  cardLinkHover: {
+    color: '#007bff'
+  },
   introduction: {
     color: '#666',
     marginBottom: '20px',
-    flex: 1
+    flex: 1,
+    lineHeight: '1.6'
   },
   footer: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 'auto'
+    marginTop: 'auto',
+    paddingTop: '15px',
+    borderTop: '1px solid #eee'
+  },
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px'
   },
   date: {
     color: '#888',
-    fontSize: '14px'
+    fontSize: '14px',
+    fontStyle: 'italic'
   },
   readMore: {
     color: '#007bff',
     textDecoration: 'none',
-    fontWeight: '500'
+    fontWeight: '500',
+    fontSize: '14px'
+  },
+  publishedBadge: {
+    background: '#d4edda',
+    color: '#155724',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    fontSize: '12px',
+    fontWeight: '600'
+  },
+  draftBadge: {
+    background: '#fff3cd',
+    color: '#856404',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    fontSize: '12px',
+    fontWeight: '600'
   },
   pagination: {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     gap: '20px',
-    marginTop: '40px'
+    marginTop: '40px',
+    padding: '20px'
   },
   pageButton: {
-    padding: '8px 16px',
+    padding: '10px 20px',
     background: '#007bff',
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '6px',
     cursor: 'pointer',
-    transition: 'background 0.3s'
+    transition: 'background 0.3s, transform 0.2s',
+    fontSize: '16px',
+    fontWeight: '500'
+  },
+  disabledButton: {
+    background: '#ccc',
+    cursor: 'not-allowed',
+    transform: 'none'
   },
   pageInfo: {
     fontSize: '16px',
-    color: '#666'
+    color: '#666',
+    fontWeight: '500'
   },
   noBlogs: {
     textAlign: 'center',
     padding: '60px 20px',
     color: '#666',
-    fontSize: '18px'
+    fontSize: '18px',
+    background: '#f8f9fa',
+    borderRadius: '10px'
+  },
+  hint: {
+    fontSize: '14px',
+    color: '#999',
+    marginTop: '10px'
+  },
+  loading: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '60px 20px',
+    textAlign: 'center'
+  },
+  spinner: {
+    width: '40px',
+    height: '40px',
+    border: '4px solid #f3f3f3',
+    borderTop: '4px solid #007bff',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+    marginBottom: '20px'
+  },
+  errorContainer: {
+    textAlign: 'center',
+    padding: '60px 20px',
+    background: '#f8d7da',
+    borderRadius: '10px',
+    margin: '20px'
+  },
+  error: {
+    color: '#721c24',
+    fontSize: '18px',
+    marginBottom: '20px'
+  },
+  retryButton: {
+    padding: '10px 25px',
+    background: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    transition: 'background 0.3s'
   }
 };
+
+// Add CSS animation
+const styleSheet = document.styleSheets[0];
+styleSheet.insertRule(`
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`, styleSheet.cssRules.length);
 
 export default BlogList;
