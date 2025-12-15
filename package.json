@@ -6,7 +6,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "build": "cd frontend && npm ci && npm run build && mkdir -p ../backend/public && cp -r build/* ../backend/public/",
+    "build": "echo '🚀 Starting build process...' && cd frontend && npm ci && npm run build && echo '📁 Build completed. Files in frontend/build:' && ls -la build/ && echo '📋 Copying to backend/public...' && mkdir -p ../backend/public && cp -r build/. ../backend/public/ && echo '✅ Build complete!' && echo '📁 Files in backend/public:' && ls -la ../backend/public/",
     "start": "cd backend && node server.js"
   }
 }
