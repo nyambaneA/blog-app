@@ -6,14 +6,13 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-// === KEY CHANGE 1: Detect Vercel environment ===
+// === KEY CHANGE: Detect Vercel environment ===
 const isVercel = process.env.VERCEL === '1';
-// Force production mode on Vercel or if NODE_ENV is set
 const isProduction = process.env.NODE_ENV === 'production' || isVercel;
 
 if (isVercel) {
     console.log('🚀 Running on Vercel platform');
-    process.env.NODE_ENV = 'production'; // Explicitly set for consistency
+    process.env.NODE_ENV = 'production';
 }
 
 // Import routes
@@ -30,8 +29,8 @@ console.log(`🔍 Vercel Detected: ${isVercel ? 'YES' : 'NO'}`);
 // ======================
 const corsOptions = {
     origin: isProduction 
-        ? process.env.FRONTEND_URL || 'https://your-vercel-domain.vercel.app' // Update this
-        : true, // Allow all in development
+        ? process.env.FRONTEND_URL || 'https://blog-app-ge2o.vercel.app'
+        : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -41,7 +40,7 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 // ======================
-// Database Connection (FIXED for Vercel)
+// Database Connection
 // ======================
 const connectDB = async () => {
     try {
@@ -52,14 +51,11 @@ const connectDB = async () => {
             
             if (isProduction) {
                 console.error('🚨 Cannot run production without database connection');
-                // Don't exit immediately on Vercel, but log heavily
-                console.error('🚨 Application will start but database operations will fail');
             } else {
                 console.log('⚠️  Development mode: Continuing without database connection');
                 return;
             }
         } else {
-            // Log a masked version for security
             const maskedURI = mongoURI.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@');
             console.log('🔗 Attempting MongoDB connection to:', maskedURI);
             
@@ -71,7 +67,6 @@ const connectDB = async () => {
             
             console.log('✅ MongoDB connected successfully');
             
-            // Connection event listeners
             mongoose.connection.on('error', err => {
                 console.error('❌ MongoDB connection error:', err.message);
             });
@@ -86,8 +81,6 @@ const connectDB = async () => {
         
         if (isProduction) {
             console.error('⚠️  Production server starting without database connection');
-            // On Vercel, we don't want to crash the server
-            // Let it start and handle DB errors gracefully in routes
         }
     }
 };
@@ -101,10 +94,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(isProduction ? 'combined' : 'dev'));
 
-// === KEY CHANGE 2: Debug middleware for Vercel ===
+// Debug middleware
 app.use((req, res, next) => {
-    if (req.url === '/' || req.url === '/api/health') {
-        console.log(`📥 ${req.method} ${req.url} - NODE_ENV: ${process.env.NODE_ENV}, VERCEL: ${process.env.VERCEL}`);
+    if (req.url === '/' || req.url === '/api/health' || req.url === '/api/debug/files') {
+        console.log(`📥 ${req.method} ${req.url}`);
     }
     next();
 });
@@ -139,10 +132,6 @@ app.get('/api/health', (req, res) => {
             status: statusText,
             uriConfigured: !!process.env.MONGODB_URI
         },
-        frontend: {
-            serving: isProduction ? 'from /public' : 'separate (dev)',
-            built: isProduction ? fs.existsSync(path.join(__dirname, 'public', 'index.html')) : 'development mode'
-        },
         uptime: process.uptime()
     });
 });
@@ -156,99 +145,160 @@ app.get('/api/info', (req, res) => {
         endpoints: {
             auth: '/api/auth',
             blogs: '/api/blogs',
-            health: '/api/health'
+            health: '/api/health',
+            debug: '/api/debug/files'
         }
     });
 });
 
 // ======================
-// === FIXED: Production Static File Serving (No filesystem writes) ===
+// Debug Endpoint - Check File Locations
+// ======================
+app.get('/api/debug/files', (req, res) => {
+    const checkPaths = [
+        { path: path.join(__dirname, 'public'), name: 'backend/public' },
+        { path: path.join(__dirname, '../frontend/build'), name: 'frontend/build' },
+        { path: __dirname, name: 'backend directory' }
+    ];
+    
+    const results = checkPaths.map(item => {
+        const exists = fs.existsSync(item.path);
+        let files = [];
+        let hasIndexHtml = false;
+        if (exists) {
+            try {
+                files = fs.readdirSync(item.path);
+                hasIndexHtml = files.includes('index.html');
+            } catch (err) {
+                files = [`Error: ${err.message}`];
+            }
+        }
+        return {
+            name: item.name,
+            exists,
+            path: item.path,
+            file_count: exists ? files.length : 0,
+            has_index_html: hasIndexHtml,
+            sample_files: exists ? files.slice(0, 5) : []
+        };
+    });
+    
+    res.json({
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV,
+        vercel: isVercel,
+        production: isProduction,
+        file_check: results,
+        server_root: __dirname,
+        current_working_dir: process.cwd()
+    });
+});
+
+// ======================
+// Production Static File Serving (Dual Path Check)
 // ======================
 if (isProduction) {
-    const publicDir = path.join(__dirname, 'public');
+    // Try multiple possible locations for frontend build
+    let publicDir = null;
+    let source = 'none';
     
-    console.log(`📁 Production: Checking public directory at ${publicDir}`);
+    // Location 1: frontend/build (where React builds to)
+    const frontendBuildPath = path.join(__dirname, '../frontend/build');
+    // Location 2: backend/public (if files were copied)
+    const backendPublicPath = path.join(__dirname, 'public');
     
-    // === FIXED: Only check, don't create directories/files ===
-    if (fs.existsSync(publicDir)) {
+    console.log(`📁 Checking for frontend files...`);
+    console.log(`  1. frontend/build: ${frontendBuildPath} - exists: ${fs.existsSync(frontendBuildPath)}`);
+    console.log(`  2. backend/public: ${backendPublicPath} - exists: ${fs.existsSync(backendPublicPath)}`);
+    
+    if (fs.existsSync(frontendBuildPath)) {
+        publicDir = frontendBuildPath;
+        source = 'frontend/build';
+        console.log(`✅ Using frontend/build directory`);
+    } else if (fs.existsSync(backendPublicPath)) {
+        publicDir = backendPublicPath;
+        source = 'backend/public';
+        console.log(`✅ Using backend/public directory`);
+    } else {
+        console.warn('⚠️  No frontend build found in either location');
+    }
+    
+    if (publicDir) {
+        // List files for debugging
         try {
             const files = fs.readdirSync(publicDir);
-            console.log(`📁 Files in public directory: ${files.length} files`);
-            if (files.length > 0 && files.length < 10) {
-                console.log(`📁 File list: ${files.join(', ')}`);
-            } else if (files.length >= 10) {
-                console.log(`📁 File list: ${files.slice(0, 5).join(', ')}... and ${files.length - 5} more`);
+            console.log(`📁 Files in ${source}: ${files.length}`);
+            if (files.length > 0) {
+                console.log(`📁 First 5 files: ${files.slice(0, 5).join(', ')}`);
+                if (files.includes('index.html')) {
+                    console.log('✅ Found index.html');
+                } else {
+                    console.warn('⚠️  index.html not found in files list');
+                }
             }
         } catch (err) {
-            console.error('❌ Error reading public directory:', err.message);
+            console.error('❌ Error reading directory:', err.message);
         }
         
         // Serve static files
         app.use(express.static(publicDir, {
             maxAge: '1d',
-            fallthrough: true // Important: allows requests to continue to other routes
+            fallthrough: true,
+            extensions: ['html', 'htm']
         }));
         
-        console.log('✅ Production: Static files will be served from', publicDir);
+        console.log(`✅ Serving static files from: ${source}`);
     } else {
-        console.warn('⚠️  WARNING: Public directory does not exist at', publicDir);
-        console.warn('   Frontend build may have failed or files not copied.');
-        console.warn('   Check that "npm run build" creates backend/public/ during build phase.');
+        console.log('ℹ️  No static files directory found - API only mode');
     }
 }
 
 // ======================
-// === FIXED: Root Route Handling ===
+// Root Route Handling
 // ======================
 app.get('/', (req, res) => {
     if (isProduction) {
-        // In production, try to serve the React app
-        const publicDir = path.join(__dirname, 'public');
-        const indexPath = path.join(publicDir, 'index.html');
+        // Try multiple locations for index.html
+        const locations = [
+            { path: path.join(__dirname, '../frontend/build/index.html'), name: 'frontend/build' },
+            { path: path.join(__dirname, 'public/index.html'), name: 'backend/public' }
+        ];
         
-        if (fs.existsSync(indexPath)) {
-            console.log('📄 Serving React frontend from', indexPath);
-            return res.sendFile(indexPath);
-        } else {
-            // Frontend not built - show helpful error instead of development message
-            console.error('❌ index.html not found. Frontend build may have failed.');
-            return res.status(500).json({
-                error: 'Frontend not built',
-                message: 'The React frontend was not built properly.',
-                instructions: 'Check Vercel build logs for frontend build errors.',
-                api: {
-                    health: '/api/health',
-                    info: '/api/info',
-                    note: 'API endpoints are working (database connected successfully)'
-                },
-                build: {
-                    expected: 'backend/public/index.html',
-                    actual: indexPath,
-                    exists: fs.existsSync(indexPath)
-                }
-            });
+        console.log('🔍 Looking for frontend in production...');
+        
+        for (const loc of locations) {
+            if (fs.existsSync(loc.path)) {
+                console.log(`📄 Serving React frontend from: ${loc.name}`);
+                return res.sendFile(loc.path);
+            } else {
+                console.log(`❌ Not found: ${loc.name}`);
+            }
         }
+        
+        // No frontend found - show helpful error
+        console.error('❌ No frontend build found in any location');
+        return res.status(500).json({
+            error: 'Frontend not deployed',
+            message: 'React frontend build files not found.',
+            instructions: '1. Check Vercel build logs\n2. Visit /api/debug/files to see available files\n3. Ensure frontend builds to frontend/build/',
+            check_endpoint: '/api/debug/files',
+            api_endpoints: {
+                health: '/api/health',
+                info: '/api/info'
+            }
+        });
     }
     
     // Development message
     res.json({
-        message: 'Blog API Server',
-        status: 'running',
-        environment: isProduction ? 'production' : 'development',
-        vercel: isVercel,
-        config: {
-            database: process.env.MONGODB_URI ? 'Configured' : 'Not configured',
-            source: 'config/db.config.js',
-            connected: mongoose.connection.readyState === 1
-        },
-        frontend: isProduction ? 'Should be served from /public' : 'http://localhost:3000',
-        instructions: isProduction 
-            ? 'Frontend should be served automatically. If seeing this, check build process.'
-            : 'Run React app separately on port 3000',
+        message: 'Blog API Server - Development Mode',
+        note: 'Frontend runs separately on port 3000',
+        frontend: 'http://localhost:3000',
+        api: 'http://localhost:5000/api',
         endpoints: {
-            api: '/api',
             health: '/api/health',
-            info: '/api/info'
+            info: '/api/info',
+            debug: '/api/debug/files'
         }
     });
 });
@@ -268,15 +318,20 @@ if (isProduction) {
             return next();
         }
         
-        const publicDir = path.join(__dirname, 'public');
-        const indexPath = path.join(publicDir, 'index.html');
+        // Try to serve from frontend/build first, then backend/public
+        const locations = [
+            path.join(__dirname, '../frontend/build/index.html'),
+            path.join(__dirname, 'public/index.html')
+        ];
         
-        if (fs.existsSync(indexPath)) {
-            res.sendFile(indexPath);
-        } else {
-            // If frontend not built, return 404 or API error
-            next();
+        for (const indexPath of locations) {
+            if (fs.existsSync(indexPath)) {
+                return res.sendFile(indexPath);
+            }
         }
+        
+        // If no index.html found, continue to next middleware
+        next();
     });
 }
 
@@ -292,6 +347,15 @@ app.use((err, req, res, next) => {
     });
 });
 
+// 404 Handler for API routes
+app.use('/api/*', (req, res) => {
+    res.status(404).json({
+        error: 'API endpoint not found',
+        path: req.originalUrl,
+        available_endpoints: ['/api/auth', '/api/blogs', '/api/health', '/api/info', '/api/debug/files']
+    });
+});
+
 // ======================
 // Start Server
 // ======================
@@ -299,8 +363,12 @@ const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
-    const publicDirExists = fs.existsSync(path.join(__dirname, 'public'));
-    const indexPathExists = fs.existsSync(path.join(__dirname, 'public', 'index.html'));
+    
+    // Check for frontend files
+    const frontendBuildExists = fs.existsSync(path.join(__dirname, '../frontend/build'));
+    const backendPublicExists = fs.existsSync(path.join(__dirname, 'public'));
+    const indexHtmlExists = fs.existsSync(path.join(__dirname, '../frontend/build/index.html')) || 
+                           fs.existsSync(path.join(__dirname, 'public/index.html'));
     
     console.log(`
 ╔══════════════════════════════════════════╗
@@ -310,34 +378,35 @@ const server = app.listen(PORT, () => {
 ║ Mode:      ${(isProduction ? 'production' : 'development').padEnd(30)}║
 ║ Vercel:    ${isVercel ? 'YES'.padEnd(30) : 'NO'.padEnd(30)}║
 ║ Database:  ${dbStatus.padEnd(30)}║
-║ Frontend:  ${isProduction ? (indexPathExists ? 'Ready from /public' : 'Not built').padEnd(30) : 'Separate (dev)'.padEnd(30)}║
+║ Frontend:  ${indexHtmlExists ? 'Ready ✅'.padEnd(30) : 'Not found ⚠️'.padEnd(30)}║
 ╚══════════════════════════════════════════╝
     `);
     
     console.log('\n📡 Available endpoints:');
     console.log(`   • Website:    http://localhost:${PORT}/`);
-    console.log(`   • API:        http://localhost:${PORT}/api`);
-    console.log(`   • Health:     http://localhost:${PORT}/api/health`);
-    console.log(`   • Info:       http://localhost:${PORT}/api/info`);
+    console.log(`   • API Debug:  http://localhost:${PORT}/api/debug/files`);
+    console.log(`   • API Health: http://localhost:${PORT}/api/health`);
+    console.log(`   • API Info:   http://localhost:${PORT}/api/info`);
     
     if (!isProduction) {
         console.log(`\n🔧 Development Frontend: http://localhost:3000`);
     }
     
-    console.log('\n✅ Server initialization complete');
-    console.log(`📁 Public dir exists: ${publicDirExists}`);
-    console.log(`📁 index.html exists: ${indexPathExists}`);
+    console.log('\n📁 File locations:');
+    console.log(`   • frontend/build: ${frontendBuildExists ? 'Exists' : 'Missing'}`);
+    console.log(`   • backend/public: ${backendPublicExists ? 'Exists' : 'Missing'}`);
+    console.log(`   • index.html: ${indexHtmlExists ? 'Found ✅' : 'Not found ⚠️'}`);
     
-    if (isProduction && !indexPathExists) {
-        console.warn('\n⚠️  WARNING: Frontend not built. The build process must create backend/public/index.html');
+    if (isProduction && !indexHtmlExists) {
+        console.warn('\n⚠️  WARNING: Frontend files not found.');
+        console.warn('   The build process must create frontend/build/ or backend/public/');
+        console.warn('   Visit /api/debug/files after deployment to check.');
     }
 });
 
-// Global error handler for uncaught exceptions
+// Global error handlers
 process.on('uncaughtException', (error) => {
   console.error('💥 UNCAUGHT EXCEPTION:', error.message);
-  console.error('Stack:', error.stack);
-  // Don't exit on Vercel - let the function handle it
 });
 
 process.on('unhandledRejection', (reason, promise) => {

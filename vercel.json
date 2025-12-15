@@ -6,7 +6,7 @@
       "use": "@vercel/node",
       "config": {
         "maxLambdaSize": "15mb",
-        "includeFiles": "backend/public/**"
+        "includeFiles": "frontend/build/**"
       }
     }
   ],
@@ -19,5 +19,7 @@
       "src": "/(.*)",
       "dest": "backend/vercel-server.js"
     }
-  ]
+  ],
+  "buildCommand": "npm run build",
+  "outputDirectory": "backend"
 }
