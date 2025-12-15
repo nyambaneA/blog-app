@@ -24,20 +24,32 @@ const app = express();
 console.log(`🌍 Environment: ${isProduction ? 'Production' : 'Development'}`);
 console.log(`🔍 Vercel Detected: ${isVercel ? 'YES' : 'NO'}`);
 
-// ======================
-// CORS Configuration
-// ======================
 const corsOptions = {
-    origin: isProduction 
-        ? process.env.FRONTEND_URL || 'https://blog-app-ge2o.vercel.app'
-        : true,
+    origin: function (origin, callback) {
+        // In production, allow your Vercel domain, localhost (for testing), and mobile network origins
+        const allowedOrigins = [
+            'https://blog-app-ge2o.vercel.app', // Your Vercel URL
+            'http://localhost:3000',            // Local development
+            // Add any other preview URLs Vercel generates
+        ];
+        
+        // Allow requests with no origin (like mobile apps or server-to-server requests)
+        // Also allow if the origin is in the list or if we're in development
+        if (!origin || allowedOrigins.indexOf(origin) !== -1 || !isProduction) {
+            callback(null, true);
+        } else {
+            console.warn(`CORS blocked for origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    maxAge: 86400 // Preflight result cache for 24 hours
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+app.options('*', cors(corsOptions)); // Explicitly handle preflight for all routes
 
 // ======================
 // Database Connection
