@@ -336,3 +336,15 @@ const server = app.listen(PORT, () => {
     console.log('\n✅ Server initialization complete');
     console.log(`📁 Public dir exists: ${fs.existsSync(path.join(__dirname, 'public'))}`);
 });
+
+// Global error handler for uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('💥 UNCAUGHT EXCEPTION:', error.message);
+  console.error('Stack:', error.stack);
+  // Don't exit on Vercel - let the function handle it
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 UNHANDLED REJECTION at:', promise);
+  console.error('Reason:', reason);
+});
