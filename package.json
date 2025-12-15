@@ -2,11 +2,11 @@
   "name": "blog-app",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "build": "cd backend && npm run build-frontend",
-    "start": "cd backend && npm start"
-  },
   "engines": {
     "node": "24.x"
+  },
+  "scripts": {
+    "build": "cd frontend && npm ci && npm run build && mkdir -p ../backend/public && cp -r build/* ../backend/public/",
+    "start": "cd backend && node server.js"
   }
 }

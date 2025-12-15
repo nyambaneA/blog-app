@@ -140,7 +140,8 @@ app.get('/api/health', (req, res) => {
             uriConfigured: !!process.env.MONGODB_URI
         },
         frontend: {
-            serving: isProduction ? 'from /public' : 'separate (dev)'
+            serving: isProduction ? 'from /public' : 'separate (dev)',
+            built: isProduction ? fs.existsSync(path.join(__dirname, 'public', 'index.html')) : 'development mode'
         },
         uptime: process.uptime()
     });
@@ -161,71 +162,43 @@ app.get('/api/info', (req, res) => {
 });
 
 // ======================
-// === KEY CHANGE 3: Production Static File Serving ===
+// === FIXED: Production Static File Serving (No filesystem writes) ===
 // ======================
 if (isProduction) {
     const publicDir = path.join(__dirname, 'public');
     
     console.log(`📁 Production: Checking public directory at ${publicDir}`);
     
-    // Create public directory if it doesn't exist
-    if (!fs.existsSync(publicDir)) {
-        fs.mkdirSync(publicDir, { recursive: true });
-        console.log(`📁 Created public directory: ${publicDir}`);
+    // === FIXED: Only check, don't create directories/files ===
+    if (fs.existsSync(publicDir)) {
+        try {
+            const files = fs.readdirSync(publicDir);
+            console.log(`📁 Files in public directory: ${files.length} files`);
+            if (files.length > 0 && files.length < 10) {
+                console.log(`📁 File list: ${files.join(', ')}`);
+            } else if (files.length >= 10) {
+                console.log(`📁 File list: ${files.slice(0, 5).join(', ')}... and ${files.length - 5} more`);
+            }
+        } catch (err) {
+            console.error('❌ Error reading public directory:', err.message);
+        }
         
-        // Create a placeholder if no build files exist
-        const indexPath = path.join(publicDir, 'index.html');
-        if (!fs.existsSync(indexPath)) {
-            fs.writeFileSync(indexPath, `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blog Application - Build in Progress</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-        h1 { color: #333; }
-        .status { background: #f0f0f0; padding: 20px; border-radius: 10px; display: inline-block; }
-        code { background: #e0e0e0; padding: 2px 5px; border-radius: 3px; }
-    </style>
-</head>
-<body>
-    <div class="status">
-        <h1>Blog Application</h1>
-        <p>Frontend build not found in <code>backend/public/</code></p>
-        <p>Build command may have failed or not run.</p>
-        <p>Check Vercel build logs and ensure <code>npm run build-frontend</code> copies files correctly.</p>
-        <p><a href="/api/health">API Health Check</a></p>
-    </div>
-</body>
-</html>
-            `);
-            console.log('📄 Created placeholder index.html');
-        }
+        // Serve static files
+        app.use(express.static(publicDir, {
+            maxAge: '1d',
+            fallthrough: true // Important: allows requests to continue to other routes
+        }));
+        
+        console.log('✅ Production: Static files will be served from', publicDir);
+    } else {
+        console.warn('⚠️  WARNING: Public directory does not exist at', publicDir);
+        console.warn('   Frontend build may have failed or files not copied.');
+        console.warn('   Check that "npm run build" creates backend/public/ during build phase.');
     }
-    
-    // List files in public directory for debugging
-    try {
-        const files = fs.readdirSync(publicDir);
-        console.log(`📁 Files in public directory: ${files.length} files`);
-        if (files.length > 0) {
-            console.log(`📁 File list: ${files.join(', ')}`);
-        }
-    } catch (err) {
-        console.error('❌ Error reading public directory:', err.message);
-    }
-    
-    // Serve static files
-    app.use(express.static(publicDir, {
-        maxAge: isProduction ? '1d' : '0'
-    }));
-    
-    console.log('✅ Production: Static files will be served from', publicDir);
 }
 
 // ======================
-// === KEY CHANGE 4: Root Route Handling ===
+// === FIXED: Root Route Handling ===
 // ======================
 app.get('/', (req, res) => {
     if (isProduction) {
@@ -237,12 +210,27 @@ app.get('/', (req, res) => {
             console.log('📄 Serving React frontend from', indexPath);
             return res.sendFile(indexPath);
         } else {
-            console.error('❌ index.html not found in production:', indexPath);
-            // Fall through to development message
+            // Frontend not built - show helpful error instead of development message
+            console.error('❌ index.html not found. Frontend build may have failed.');
+            return res.status(500).json({
+                error: 'Frontend not built',
+                message: 'The React frontend was not built properly.',
+                instructions: 'Check Vercel build logs for frontend build errors.',
+                api: {
+                    health: '/api/health',
+                    info: '/api/info',
+                    note: 'API endpoints are working (database connected successfully)'
+                },
+                build: {
+                    expected: 'backend/public/index.html',
+                    actual: indexPath,
+                    exists: fs.existsSync(indexPath)
+                }
+            });
         }
     }
     
-    // Development message or fallback
+    // Development message
     res.json({
         message: 'Blog API Server',
         status: 'running',
@@ -286,7 +274,8 @@ if (isProduction) {
         if (fs.existsSync(indexPath)) {
             res.sendFile(indexPath);
         } else {
-            next(); // Let error handler deal with it
+            // If frontend not built, return 404 or API error
+            next();
         }
     });
 }
@@ -310,6 +299,8 @@ const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
+    const publicDirExists = fs.existsSync(path.join(__dirname, 'public'));
+    const indexPathExists = fs.existsSync(path.join(__dirname, 'public', 'index.html'));
     
     console.log(`
 ╔══════════════════════════════════════════╗
@@ -319,7 +310,7 @@ const server = app.listen(PORT, () => {
 ║ Mode:      ${(isProduction ? 'production' : 'development').padEnd(30)}║
 ║ Vercel:    ${isVercel ? 'YES'.padEnd(30) : 'NO'.padEnd(30)}║
 ║ Database:  ${dbStatus.padEnd(30)}║
-║ Frontend:  ${isProduction ? 'Serving from /public'.padEnd(30) : 'Separate (dev)'.padEnd(30)}║
+║ Frontend:  ${isProduction ? (indexPathExists ? 'Ready from /public' : 'Not built').padEnd(30) : 'Separate (dev)'.padEnd(30)}║
 ╚══════════════════════════════════════════╝
     `);
     
@@ -334,7 +325,12 @@ const server = app.listen(PORT, () => {
     }
     
     console.log('\n✅ Server initialization complete');
-    console.log(`📁 Public dir exists: ${fs.existsSync(path.join(__dirname, 'public'))}`);
+    console.log(`📁 Public dir exists: ${publicDirExists}`);
+    console.log(`📁 index.html exists: ${indexPathExists}`);
+    
+    if (isProduction && !indexPathExists) {
+        console.warn('\n⚠️  WARNING: Frontend not built. The build process must create backend/public/index.html');
+    }
 });
 
 // Global error handler for uncaught exceptions
