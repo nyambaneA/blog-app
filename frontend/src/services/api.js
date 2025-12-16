@@ -1,45 +1,47 @@
 import axios from 'axios';
 
-// Smart API URL detection
-const getApiUrl = () => {
-  // If environment variable is set, use it
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL;
-  }
-  
-  // Auto-detect based on current location
-  const isProduction = window.location.hostname.includes('vercel.app');
-  
-  if (isProduction) {
-    // In production on Vercel
-    return window.location.origin + '/api';
-  } else {
-    // In local development
-    return 'http://localhost:5000/api';
-  }
-};
+// ==============================
+// API URL Configuration
+// ==============================
+// Priority:
+// 1. REACT_APP_API_URL (if explicitly set)
+// 2. Production → relative /api
+// 3. Development → localhost
+// ==============================
 
-const API_URL = getApiUrl();
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? '/api'
+    : 'http://localhost:5000/api');
 
-console.log('🔧 API URL configured as:', API_URL); // Debug log
+// Debug (safe to keep during testing)
+console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
+console.log('🔧 API URL configured as:', API_URL);
 
-// Create axios instance
+// ==============================
+// Axios Instance
+// ==============================
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000, // 10 second timeout
+  timeout: 10000,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 });
 
-// Request interceptor
+// ==============================
+// Request Interceptor
+// ==============================
 api.interceptors.request.use(
   (config) => {
     console.log(`📤 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
     return config;
   },
   (error) => {
@@ -48,7 +50,9 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor
+// ==============================
+// Response Interceptor
+// ==============================
 api.interceptors.response.use(
   (response) => {
     console.log(`📥 ${response.status} ${response.config.url}`);
@@ -59,26 +63,22 @@ api.interceptors.response.use(
       url: error.config?.url,
       status: error.response?.status,
       message: error.message,
-      code: error.code
+      code: error.code,
     });
-    
-    // Handle network errors (mobile-specific)
+
+    // Network / server unreachable
     if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-      console.error('🌐 Network error - check:');
-      console.error('  1. Is backend running?');
-      console.error('  2. Correct API URL?', API_URL);
-      console.error('  3. CORS configured?');
-      
-      // Don't redirect on network errors - just show error
-      return Promise.reject(new Error('Cannot connect to server. Please check your internet connection.'));
+      return Promise.reject(
+        new Error('Cannot connect to server. Please try again later.')
+      );
     }
-    
+
+    // Auth expired
     if (error.response?.status === 401) {
-      // Clear token and redirect to login
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
-    
+
     return Promise.reject(error);
   }
 );
