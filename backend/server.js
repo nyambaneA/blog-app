@@ -28,7 +28,7 @@ const corsOptions = {
     origin: function (origin, callback) {
         // In production, allow your Vercel domain, localhost (for testing), and mobile network origins
         const allowedOrigins = [
-            'https://blog-app-ge2o.vercel.app', // Your Vercel URL
+            'https://blog-app-mocha-tau.vercel.app', // Your Vercel URL
             'http://localhost:3000',            // Local development
             // Add any other preview URLs Vercel generates
         ];
