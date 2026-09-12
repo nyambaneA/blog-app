@@ -435,6 +435,10 @@ const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
+const dns = require('dns');
+
+// Force Node.js to use Google Public DNS
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 // ======================
 // Environment Detection
