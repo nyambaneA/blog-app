@@ -428,6 +428,406 @@
 // });
 
 
+// const express = require('express');
+// const mongoose = require('mongoose');
+// const cors = require('cors');
+// const morgan = require('morgan');
+// const path = require('path');
+// const fs = require('fs');
+// require('dotenv').config();
+// const dns = require('dns');
+
+// // Force Node.js to use Google Public DNS
+// dns.setServers(['8.8.8.8', '8.8.4.4']);
+
+// // ======================
+// // Environment Detection
+// // ======================
+// const isVercel = process.env.VERCEL === '1';
+// const isProduction =
+//   process.env.NODE_ENV === 'production' || isVercel;
+
+// if (isVercel) {
+//   process.env.NODE_ENV = 'production';
+//   console.log('🚀 Running on Vercel');
+// }
+
+// // ======================
+// // Import Models FIRST
+// // ======================
+// require('./models/Admin.model');
+// require('./models/Blog.model');
+
+// // ======================
+// // Import Routes
+// // ======================
+// const authRoutes = require('./routes/auth.routes');
+// const blogRoutes = require('./routes/blog.routes');
+
+// // ======================
+// // Express App
+// // ======================
+// const app = express();
+// const PORT = process.env.PORT || 5000;
+
+// console.log(
+//   `🌍 Environment: ${
+//     isProduction ? 'Production' : 'Development'
+//   }`
+// );
+
+// console.log(
+//   `🔍 Vercel Detected: ${isVercel ? 'YES' : 'NO'}`
+// );
+
+// // ======================
+// // Database Connection
+// // ======================
+// const connectDB = async () => {
+//   try {
+//     const mongoURI = process.env.MONGODB_URI;
+
+//     if (!mongoURI) {
+//       throw new Error('MONGODB_URI is missing');
+//     }
+
+//     const maskedURI = mongoURI.replace(
+//       /\/\/([^:]+):([^@]+)@/,
+//       '//***:***@'
+//     );
+
+//     console.log('🔗 Connecting to MongoDB...');
+//     console.log(maskedURI);
+
+//     await mongoose.connect(mongoURI);
+
+//     console.log('✅ MongoDB connected successfully');
+
+//     mongoose.connection.on('error', (err) => {
+//       console.error('❌ MongoDB runtime error:', err);
+//     });
+
+//     mongoose.connection.on('disconnected', () => {
+//       console.error('❌ MongoDB disconnected');
+//     });
+
+//   } catch (error) {
+//     console.error('❌ MongoDB connection failed');
+//     console.error(error);
+
+//     // STOP APP COMPLETELY
+//     process.exit(1);
+//   }
+// };
+
+// // ======================
+// // CORS
+// // ======================
+// const allowedOrigins = [
+//   'https://www.lecturerroom.online',
+//   'http://localhost:3000',
+// ];
+
+// const corsOptions = {
+//   origin: function (origin, callback) {
+//     if (
+//       !origin ||
+//       allowedOrigins.includes(origin) ||
+//       !isProduction
+//     ) {
+//       callback(null, true);
+//     } else {
+//       console.warn(`❌ CORS blocked: ${origin}`);
+//       callback(new Error('Not allowed by CORS'));
+//     }
+//   },
+//   credentials: true,
+//   methods: [
+//     'GET',
+//     'POST',
+//     'PUT',
+//     'DELETE',
+//     'PATCH',
+//     'OPTIONS',
+//   ],
+//   allowedHeaders: [
+//     'Content-Type',
+//     'Authorization',
+//     'X-Requested-With',
+//     'Accept',
+//   ],
+// };
+
+// app.use(cors(corsOptions));
+// app.options('*', cors(corsOptions));
+
+// // ======================
+// // Middleware
+// // ======================
+// app.use(express.json({ limit: '10mb' }));
+// app.use(express.urlencoded({ extended: true }));
+// app.use(morgan(isProduction ? 'combined' : 'dev'));
+
+// // ======================
+// // Request Logger
+// // ======================
+// app.use((req, res, next) => {
+//   console.log(`📥 ${req.method} ${req.originalUrl}`);
+//   next();
+// });
+
+// // ======================
+// // API Routes
+// // ======================
+// app.use('/api/auth', authRoutes);
+// app.use('/api/blogs', blogRoutes);
+
+// // ======================
+// // Health Route
+// // ======================
+// app.get('/api/health', (req, res) => {
+//   const readyState = mongoose.connection.readyState;
+
+//   let dbStatus = 'unknown';
+
+//   switch (readyState) {
+//     case 0:
+//       dbStatus = 'disconnected';
+//       break;
+//     case 1:
+//       dbStatus = 'connected';
+//       break;
+//     case 2:
+//       dbStatus = 'connecting';
+//       break;
+//     case 3:
+//       dbStatus = 'disconnecting';
+//       break;
+//   }
+
+//   res.status(readyState === 1 ? 200 : 500).json({
+//     success: readyState === 1,
+//     environment: process.env.NODE_ENV,
+//     vercel: isVercel,
+//     database: dbStatus,
+//     uptime: process.uptime(),
+//     timestamp: new Date().toISOString(),
+//   });
+// });
+
+// // ======================
+// // DB Status Route
+// // ======================
+// app.get('/api/db-status', (req, res) => {
+//   res.json({
+//     readyState: mongoose.connection.readyState,
+//     connected: mongoose.connection.readyState === 1,
+//   });
+// });
+
+// // ======================
+// // API Info
+// // ======================
+// app.get('/api/info', (req, res) => {
+//   res.json({
+//     name: 'Blog API',
+//     version: '1.0.0',
+//     environment: process.env.NODE_ENV,
+//     endpoints: {
+//       auth: '/api/auth',
+//       blogs: '/api/blogs',
+//       health: '/api/health',
+//       db: '/api/db-status',
+//     },
+//   });
+// });
+
+// // ======================
+// // Static Frontend
+// // ======================
+// if (isProduction) {
+//   const frontendBuildPath = path.join(
+//     __dirname,
+//     '../frontend/build'
+//   );
+
+//   const backendPublicPath = path.join(
+//     __dirname,
+//     'public'
+//   );
+
+//   let publicDir = null;
+
+//   if (fs.existsSync(frontendBuildPath)) {
+//     publicDir = frontendBuildPath;
+//     console.log('✅ Using frontend/build');
+//   } else if (fs.existsSync(backendPublicPath)) {
+//     publicDir = backendPublicPath;
+//     console.log('✅ Using backend/public');
+//   }
+
+//   if (publicDir) {
+//     app.use(
+//       express.static(publicDir, {
+//         maxAge: '1d',
+//       })
+//     );
+
+//     console.log(
+//       `📁 Serving frontend from: ${publicDir}`
+//     );
+//   } else {
+//     console.warn('⚠️ No frontend build found');
+//   }
+// }
+
+// // ======================
+// // Root Route
+// // ======================
+// app.get('/', (req, res) => {
+//   if (isProduction) {
+//     const possiblePaths = [
+//       path.join(
+//         __dirname,
+//         '../frontend/build/index.html'
+//       ),
+//       path.join(__dirname, 'public/index.html'),
+//     ];
+
+//     for (const filePath of possiblePaths) {
+//       if (fs.existsSync(filePath)) {
+//         return res.sendFile(filePath);
+//       }
+//     }
+
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Frontend build not found',
+//     });
+//   }
+
+//   res.json({
+//     success: true,
+//     message: 'Blog API Development Server',
+//     frontend: 'http://localhost:3000',
+//     api: 'http://localhost:5000/api',
+//   });
+// });
+
+// // ======================
+// // SPA Fallback
+// // ======================
+// if (isProduction) {
+//   app.get('*', (req, res, next) => {
+//     if (req.path.startsWith('/api/')) {
+//       return next();
+//     }
+
+//     const possiblePaths = [
+//       path.join(
+//         __dirname,
+//         '../frontend/build/index.html'
+//       ),
+//       path.join(__dirname, 'public/index.html'),
+//     ];
+
+//     for (const filePath of possiblePaths) {
+//       if (fs.existsSync(filePath)) {
+//         return res.sendFile(filePath);
+//       }
+//     }
+
+//     next();
+//   });
+// }
+
+// // ======================
+// // API 404
+// // ======================
+// app.use('/api/*', (req, res) => {
+//   res.status(404).json({
+//     success: false,
+//     message: 'API endpoint not found',
+//     path: req.originalUrl,
+//   });
+// });
+
+// // ======================
+// // Global Error Handler
+// // ======================
+// app.use((err, req, res, next) => {
+//   console.error('🔥 SERVER ERROR');
+//   console.error(err);
+
+//   res.status(err.status || 500).json({
+//     success: false,
+//     message: isProduction
+//       ? 'Internal Server Error'
+//       : err.message,
+//     ...(isProduction ? {} : { stack: err.stack }),
+//   });
+// });
+
+// // ======================
+// // Global Process Errors
+// // ======================
+// process.on('uncaughtException', (error) => {
+//   console.error('💥 UNCAUGHT EXCEPTION');
+//   console.error(error);
+// });
+
+// process.on('unhandledRejection', (reason) => {
+//   console.error('💥 UNHANDLED REJECTION');
+//   console.error(reason);
+// });
+
+// // ======================
+// // Start Server
+// // ======================
+// const startServer = async () => {
+//   try {
+//     await connectDB();
+
+//     app.listen(PORT, () => {
+//       console.log(`
+// ╔══════════════════════════════════════════╗
+// ║         🚀 Blog Application Server       ║
+// ╠══════════════════════════════════════════╣
+// ║ Port:      ${PORT.toString().padEnd(30)}║
+// ║ Mode:      ${
+//         (isProduction
+//           ? 'production'
+//           : 'development'
+//         ).padEnd(30)
+//       }║
+// ║ Vercel:    ${
+//         (isVercel ? 'YES' : 'NO').padEnd(30)
+//       }║
+// ║ Database:  Connected                     ║
+// ╚══════════════════════════════════════════╝
+//       `);
+
+//       console.log('\n📡 API Endpoints');
+//       console.log(
+//         `• Health: http://localhost:${PORT}/api/health`
+//       );
+//       console.log(
+//         `• DB:     http://localhost:${PORT}/api/db-status`
+//       );
+//       console.log(
+//         `• Blogs:  http://localhost:${PORT}/api/blogs`
+//       );
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Failed to start server');
+//     console.error(error);
+//     process.exit(1);
+//   }
+// };
+
+// startServer();
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -437,7 +837,7 @@ const fs = require('fs');
 require('dotenv').config();
 const dns = require('dns');
 
-// Force Node.js to use Google Public DNS
+// Force Node.js to use Google Public DNS (fixes querySrv ENOTFOUND on Vercel)
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 // ======================
@@ -470,20 +870,21 @@ const blogRoutes = require('./routes/blog.routes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-console.log(
-  `🌍 Environment: ${
-    isProduction ? 'Production' : 'Development'
-  }`
-);
-
-console.log(
-  `🔍 Vercel Detected: ${isVercel ? 'YES' : 'NO'}`
-);
+console.log(`🌍 Environment: ${isProduction ? 'Production' : 'Development'}`);
+console.log(`🔍 Vercel Detected: ${isVercel ? 'YES' : 'NO'}`);
 
 // ======================
-// Database Connection
+// Database Connection (serverless-safe, cached)
 // ======================
+let isConnected = false;
+
 const connectDB = async () => {
+  // Reuse existing connection (critical for serverless)
+  if (isConnected || mongoose.connection.readyState === 1) {
+    console.log('♻️  Reusing existing MongoDB connection');
+    return;
+  }
+
   try {
     const mongoURI = process.env.MONGODB_URI;
 
@@ -499,42 +900,59 @@ const connectDB = async () => {
     console.log('🔗 Connecting to MongoDB...');
     console.log(maskedURI);
 
-    await mongoose.connect(mongoURI);
+    await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 10000,
+    });
 
+    isConnected = true;
     console.log('✅ MongoDB connected successfully');
 
     mongoose.connection.on('error', (err) => {
       console.error('❌ MongoDB runtime error:', err);
+      isConnected = false;
     });
 
     mongoose.connection.on('disconnected', () => {
       console.error('❌ MongoDB disconnected');
+      isConnected = false;
     });
-
   } catch (error) {
     console.error('❌ MongoDB connection failed');
     console.error(error);
-
-    // STOP APP COMPLETELY
-    process.exit(1);
+    isConnected = false;
+    // DO NOT process.exit(1) — let the request return a 500 instead
+    throw error;
   }
 };
+
+// ======================
+// Middleware to ensure DB is connected before handling requests
+// ======================
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Database connection failed',
+      error: isProduction ? undefined : err.message,
+    });
+  }
+});
 
 // ======================
 // CORS
 // ======================
 const allowedOrigins = [
   'https://www.lecturerroom.online',
+  'https://lecturerroom.online',
   'http://localhost:3000',
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (
-      !origin ||
-      allowedOrigins.includes(origin) ||
-      !isProduction
-    ) {
+    if (!origin || allowedOrigins.includes(origin) || !isProduction) {
       callback(null, true);
     } else {
       console.warn(`❌ CORS blocked: ${origin}`);
@@ -542,14 +960,7 @@ const corsOptions = {
     }
   },
   credentials: true,
-  methods: [
-    'GET',
-    'POST',
-    'PUT',
-    'DELETE',
-    'PATCH',
-    'OPTIONS',
-  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
     'Authorization',
@@ -562,15 +973,12 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 // ======================
-// Middleware
+// Body + Logging
 // ======================
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(isProduction ? 'combined' : 'dev'));
 
-// ======================
-// Request Logger
-// ======================
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl}`);
   next();
@@ -589,20 +997,11 @@ app.get('/api/health', (req, res) => {
   const readyState = mongoose.connection.readyState;
 
   let dbStatus = 'unknown';
-
   switch (readyState) {
-    case 0:
-      dbStatus = 'disconnected';
-      break;
-    case 1:
-      dbStatus = 'connected';
-      break;
-    case 2:
-      dbStatus = 'connecting';
-      break;
-    case 3:
-      dbStatus = 'disconnecting';
-      break;
+    case 0: dbStatus = 'disconnected'; break;
+    case 1: dbStatus = 'connected'; break;
+    case 2: dbStatus = 'connecting'; break;
+    case 3: dbStatus = 'disconnecting'; break;
   }
 
   res.status(readyState === 1 ? 200 : 500).json({
@@ -643,21 +1042,13 @@ app.get('/api/info', (req, res) => {
 });
 
 // ======================
-// Static Frontend
+// Static Frontend (works locally; on Vercel, static files are served from frontend/build automatically)
 // ======================
 if (isProduction) {
-  const frontendBuildPath = path.join(
-    __dirname,
-    '../frontend/build'
-  );
-
-  const backendPublicPath = path.join(
-    __dirname,
-    'public'
-  );
+  const frontendBuildPath = path.join(__dirname, '../frontend/build');
+  const backendPublicPath = path.join(__dirname, 'public');
 
   let publicDir = null;
-
   if (fs.existsSync(frontendBuildPath)) {
     publicDir = frontendBuildPath;
     console.log('✅ Using frontend/build');
@@ -667,15 +1058,8 @@ if (isProduction) {
   }
 
   if (publicDir) {
-    app.use(
-      express.static(publicDir, {
-        maxAge: '1d',
-      })
-    );
-
-    console.log(
-      `📁 Serving frontend from: ${publicDir}`
-    );
+    app.use(express.static(publicDir, { maxAge: '1d' }));
+    console.log(`📁 Serving frontend from: ${publicDir}`);
   } else {
     console.warn('⚠️ No frontend build found');
   }
@@ -687,10 +1071,7 @@ if (isProduction) {
 app.get('/', (req, res) => {
   if (isProduction) {
     const possiblePaths = [
-      path.join(
-        __dirname,
-        '../frontend/build/index.html'
-      ),
+      path.join(__dirname, '../frontend/build/index.html'),
       path.join(__dirname, 'public/index.html'),
     ];
 
@@ -724,10 +1105,7 @@ if (isProduction) {
     }
 
     const possiblePaths = [
-      path.join(
-        __dirname,
-        '../frontend/build/index.html'
-      ),
+      path.join(__dirname, '../frontend/build/index.html'),
       path.join(__dirname, 'public/index.html'),
     ];
 
@@ -761,9 +1139,7 @@ app.use((err, req, res, next) => {
 
   res.status(err.status || 500).json({
     success: false,
-    message: isProduction
-      ? 'Internal Server Error'
-      : err.message,
+    message: isProduction ? 'Internal Server Error' : err.message,
     ...(isProduction ? {} : { stack: err.stack }),
   });
 });
@@ -782,48 +1158,38 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // ======================
-// Start Server
+// LOCAL DEVELOPMENT: start listening
+// On Vercel we export the app instead.
 // ======================
-const startServer = async () => {
-  try {
-    await connectDB();
+if (!isVercel && require.main === module) {
+  const startServer = async () => {
+    try {
+      await connectDB();
 
-    app.listen(PORT, () => {
-      console.log(`
+      app.listen(PORT, () => {
+        console.log(`
 ╔══════════════════════════════════════════╗
 ║         🚀 Blog Application Server       ║
 ╠══════════════════════════════════════════╣
 ║ Port:      ${PORT.toString().padEnd(30)}║
-║ Mode:      ${
-        (isProduction
-          ? 'production'
-          : 'development'
-        ).padEnd(30)
-      }║
-║ Vercel:    ${
-        (isVercel ? 'YES' : 'NO').padEnd(30)
-      }║
+║ Mode:      ${(isProduction ? 'production' : 'development').padEnd(30)}║
+║ Vercel:    ${(isVercel ? 'YES' : 'NO').padEnd(30)}║
 ║ Database:  Connected                     ║
 ╚══════════════════════════════════════════╝
-      `);
+        `);
+      });
+    } catch (error) {
+      console.error('❌ Failed to start server');
+      console.error(error);
+      process.exit(1);
+    }
+  };
 
-      console.log('\n📡 API Endpoints');
-      console.log(
-        `• Health: http://localhost:${PORT}/api/health`
-      );
-      console.log(
-        `• DB:     http://localhost:${PORT}/api/db-status`
-      );
-      console.log(
-        `• Blogs:  http://localhost:${PORT}/api/blogs`
-      );
-    });
+  startServer();
+}
 
-  } catch (error) {
-    console.error('❌ Failed to start server');
-    console.error(error);
-    process.exit(1);
-  }
-};
-
-startServer();
+// ======================
+// EXPORT FOR VERCEL (the missing piece!)
+// ======================
+module.exports = app;
+module.exports.default = app;
