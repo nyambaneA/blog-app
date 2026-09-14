@@ -162,18 +162,24 @@ api.interceptors.response.use(
       );
     }
 
-    // Unauthorized
+    // Unauthorized — only log out if the user was actually authenticated
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
+      const hadToken = !!localStorage.getItem('token');
 
-      // Prevent redirect loop
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (hadToken) {
+        console.warn('🔒 Session expired — logging out');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       }
+      // If there was no token, do nothing — the guest stays on the page
+      // and the component's own error handling shows a message.
     }
 
     return Promise.reject(error);
   }
 );
-
 export default api;
