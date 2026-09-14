@@ -208,11 +208,66 @@ const getAdminBlogs = async (req, res) => {
     }
 };
 
+const getAdminStats = async (req, res) => {
+  try {
+    const [
+      totalBlogs,
+      publishedBlogs,
+      draftBlogs,
+      recentBlogs,
+      categoryStats,
+      viewsResult,
+    ] = await Promise.all([
+      Blog.countDocuments(),
+      Blog.countDocuments({ status: 'published' }),
+      Blog.countDocuments({ status: 'draft' }),
+      Blog.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('title status createdAt views'),
+      Blog.aggregate([
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Blog.aggregate([
+        { $group: { _id: null, totalViews: { $sum: '$views' } } },
+      ]),
+    ]);
+
+    const totalViews = viewsResult[0]?.totalViews || 0;
+
+    res.json({
+      success: true,
+      stats: {
+        totalBlogs,
+        publishedBlogs,
+        draftBlogs,
+        totalViews,
+        categories: categoryStats,
+        recentBlogs,
+      },
+      // Also return flat keys — some frontends read them directly
+      totalBlogs,
+      publishedBlogs,
+      draftBlogs,
+      totalViews,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching admin stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch statistics',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
     getBlogs,
     getBlogById,
     createBlog,
     updateBlog,
     deleteBlog,
+    getAdminStats,
     getAdminBlogs
 };
