@@ -1,0 +1,16 @@
+# Lecturer Room Blog
+
+> A blog covering healthcare management, social issues, culture, education, and technology.
+
+## Blog Posts
+
+- [Enhancing Strategic Approaches in Surgery](https://www.lecturerroom.online/blogs/enhancing-strategic-approaches-surgery): A case study on improving service development in a Hong Kong public hospital.
+- [Reducing Crime and Improving Safety in Nicetown](https://www.lecturerroom.online/blogs/reducing-crime-nicetown): A problem-solution essay on community safety and crime prevention.
+- [Why Dancing is a Career](https://www.lecturerroom.online/blogs/why-dancing-is-career): Exploring dance as a viable professional path.
+- [Cultural Diversity in the Workplace](https://www.lecturerroom.online/blogs/cultural-diversity-workplace): How organizations benefit from inclusive workforces.
+- [Understand Security Concepts](https://www.lecturerroom.online/blogs/understand-security-concepts): An introduction to confidentiality, integrity, and availability.
+- [Ozone Layer Depletion](https://www.lecturerroom.online/blogs/ozone-layer): The science and history of the ozone hole.
+
+## About
+
+- [About the Author](https://www.lecturerroom.online/about)
