@@ -6,7 +6,7 @@ const Admin = require('../models/Admin.model');
 
 async function createAdmin() {
     try {
-        await mongoose.connect(process.env.MONGO_URI);
+        await mongoose.connect(process.env);
 
         console.log('✅ MongoDB Connected');
 

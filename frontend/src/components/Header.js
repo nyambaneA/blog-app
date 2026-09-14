@@ -15,7 +15,7 @@ const Header = () => {
     <header style={styles.header}>
       <div className="container" style={styles.container}>
         <Link to="/" style={styles.logo}>
-          BlogApp
+          Lecture Room
         </Link>
         
         <nav style={styles.nav}>
