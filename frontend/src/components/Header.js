@@ -15,11 +15,11 @@ const Header = () => {
     <header style={styles.header}>
       <div className="container" style={styles.container}>
         <Link to="/" style={styles.logo}>
-          Lecture Room
+          Lecture Room 
         </Link>
         
         <nav style={styles.nav}>
-          <Link to="/" style={styles.navLink}>Home</Link>
+          <Link to="/" style={styles.navLink}>Blogs</Link>
           
           {isAuthenticated ? (
             <>
